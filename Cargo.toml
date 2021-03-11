@@ -1,0 +1,23 @@
+[package]
+name = "airbox-fw"
+version = "0.1.0"
+authors = ["Rafael Bachmann <rafael.bachmann.93@gmail.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+cortex-m = "0.6.2"
+cortex-m-rt = "0.6.12"
+rtt-target = {version = "0.2.0", features = ["cortex-m"] }
+nrf52840-hal = { features = ["rt"], version = "*" }
+arrayvec = {version = "0.5.2", default-features = false }
+crc_all = "0.2.0"
+#sgp40 = "0.0.1"
+
+epd-waveshare = "0.4.0"
+embedded-graphics = "0.6.2"
+
+[dependencies.embedded-hal]
+version = "0.2.3"
+features = ["unproven"]
