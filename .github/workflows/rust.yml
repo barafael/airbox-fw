@@ -1,20 +1,20 @@
-name: Rust
+on: [push]
 
-on:
-  push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
-
-env:
-  CARGO_TERM_COLOR: always
+name: build
 
 jobs:
   build:
-
+    name: Test
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v2
-    - name: Build
-      run: rustup target add thumbv7m-none-eabi && cargo build --release --verbose
+      - uses: actions/checkout@v2
+      - name: Install latest nightly
+        uses: actions-rs/toolchain@v1
+        with:
+            toolchain: nightly
+            override: true
+            components: rustfmt, clippy
+      - name: Build
+
+        run: sudo apt install arm-none-eabi-ld && rustup target add thumbv7em-none-eabihf && cargo build --release --verbose
