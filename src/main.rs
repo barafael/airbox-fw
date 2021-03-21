@@ -1,6 +1,7 @@
 #![no_main]
 #![no_std]
 
+use cortex_m::prelude::_embedded_hal_blocking_delay_DelayMs;
 use embedded_hal::digital::v2::InputPin;
 use embedded_hal::digital::v2::OutputPin;
 use rtt_target::{rprintln, rtt_init_print};
@@ -136,12 +137,13 @@ fn main() -> ! {
     rtt_init_print!();
     let p = hal::pac::Peripherals::take().unwrap();
     let port0 = hal::gpio::p0::Parts::new(p.P0);
-    let button = port0.p0_11.into_pullup_input();
+    let _button = port0.p0_11.into_pullup_input();
     let mut led = port0.p0_13.into_push_pull_output(Level::Low);
     let mut delay = Timer::new(p.TIMER1);
     let delay1 = Timer::new(p.TIMER2);
 
     let pins_1 = hal::gpio::p1::Parts::new(p.P1);
+
     let din = pins_1.p1_01.into_push_pull_output(Level::Low).degrade();
     let clk = pins_1.p1_02.into_push_pull_output(Level::Low).degrade();
     let cs = pins_1.p1_03.into_push_pull_output(Level::Low);
@@ -149,24 +151,27 @@ fn main() -> ! {
     let rst = port0.p0_29.into_push_pull_output(Level::Low);
     let busy = pins_1.p1_06.into_floating_input();
 
-    let sda = port0.p0_30.into_floating_input().degrade();
-    let scl = port0.p0_31.into_floating_input().degrade();
+    let sda_scd30 = port0.p0_30.into_floating_input().degrade();
+    let scl_scd30 = port0.p0_31.into_floating_input().degrade();
 
-    let sda1 = pins_1.p1_13.into_floating_input().degrade();
-    let scl1 = pins_1.p1_15.into_floating_input().degrade();
+    let sda_sgp40 = pins_1.p1_13.into_floating_input().degrade();
+    let scl_sgp40 = pins_1.p1_15.into_floating_input().degrade();
 
-    let pins = twim::Pins { scl, sda };
-    let pins1 = twim::Pins {
-        scl: scl1,
-        sda: sda1,
+    let pins_scd30 = twim::Pins {
+        scl: scl_scd30,
+        sda: sda_scd30,
+    };
+    let pins_sgp40 = twim::Pins {
+        scl: scl_sgp40,
+        sda: sda_sgp40,
     };
 
-    let i2c = Twim::new(p.TWIM0, pins, twim::Frequency::K100);
-    let i2c1 = Twim::new(p.TWIM1, pins1, twim::Frequency::K100);
+    let i2c_scd30 = Twim::new(p.TWIM0, pins_scd30, twim::Frequency::K100);
+    let i2c_sgp40 = Twim::new(p.TWIM1, pins_sgp40, twim::Frequency::K100);
 
-    let mut sgp40 = Sgp40::new(i2c1, 0x59, delay1);
+    let mut sgp40 = Sgp40::new(i2c_sgp40, 0x59, delay1);
 
-    let mut scd30 = SCD30::init(i2c);
+    let mut scd30 = SCD30::init(i2c_scd30);
 
     let firmware_version = scd30.get_firmware_version().unwrap_or_default();
     rprintln!(
@@ -199,6 +204,8 @@ fn main() -> ! {
         .display_frame(&mut spi)
         .expect("display frame new graphics");
 
+    let mut state: bool = false;
+
     loop {
         let scd30_result = scd30.read_measurement().unwrap_or_default();
 
@@ -222,12 +229,14 @@ fn main() -> ! {
             .display_frame(&mut spi)
             .expect("display frame new graphics");
 
-        if button.is_high().unwrap() {
+        if state {
             led.set_high().unwrap();
         } else {
             led.set_low().unwrap();
         }
-        delay.delay(1000000);
+        state = !state;
+
+        delay.delay_ms(10000u32);
     }
 }
 
@@ -252,7 +261,7 @@ pub fn draw_text(mut display: Display4in2) -> Display4in2 {
         .draw(&mut display)
         .unwrap();
 
-    Text::new("TVOC-Score:", Point::new(20, 210))
+    Text::new("TVOC Score:", Point::new(20, 210))
         .into_styled(TextStyle::new(Font12x16, BinaryColor::On))
         .draw(&mut display)
         .unwrap();
