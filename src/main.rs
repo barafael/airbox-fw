@@ -8,14 +8,13 @@ use rtt_target::{rprintln, rtt_init_print};
 // access to board peripherals:
 use nrf52840_hal::{
     self as hal,
-    gpio::{p0::Parts as P0Parts, p1::Parts as P1Parts, Level},
-    prelude::*,
+    gpio::Level,
     spim::{self, Spim},
     twim::{self, Error, Instance, Twim},
-    Temp, Timer,
+    Timer,
 };
 
-//use sgp40::*;
+use sgp40::*;
 
 use arrayvec::ArrayString;
 use core::fmt::Write;
@@ -26,8 +25,6 @@ use embedded_graphics::{
     geometry::Point,
     pixelcolor::BinaryColor,
     prelude::*,
-    primitives::{Circle, Triangle},
-    style::PrimitiveStyle,
     style::TextStyle,
     text_style,
 };
@@ -138,6 +135,7 @@ fn main() -> ! {
     let button = port0.p0_11.into_pullup_input();
     let mut led = port0.p0_13.into_push_pull_output(Level::Low);
     let mut delay = Timer::new(p.TIMER1);
+    let delay1 = Timer::new(p.TIMER2);
 
     let pins_1 = hal::gpio::p1::Parts::new(p.P1);
     let din = pins_1.p1_01.into_push_pull_output(Level::Low).degrade();
@@ -162,20 +160,21 @@ fn main() -> ! {
     let i2c = Twim::new(p.TWIM0, pins, twim::Frequency::K100);
     let i2c1 = Twim::new(p.TWIM1, pins1, twim::Frequency::K100);
 
-    //let sgp40 = Sgp40::new(i2c1, 0x31, delay.clone());
+    let mut sgp40 = Sgp40::new(i2c1, 0x31, delay1);
+    rprintln!("TVOC: {}", sgp40.measure_voc_index().unwrap_or_default());
 
-    let mut sensor = SCD30::init(i2c);
+    let mut scd30 = SCD30::init(i2c);
 
-    let firmware_version = sensor.get_firmware_version().unwrap();
+    let firmware_version = scd30.get_firmware_version().unwrap();
     rprintln!(
-        "Firmware Version: {}.{}",
+        "SCD30 Firmware Version: {}.{}",
         firmware_version[0],
         firmware_version[1]
     );
 
     let pressure = 1020_u16;
 
-    sensor.start_continuous_measurement(pressure).unwrap();
+    scd30.start_continuous_measurement(pressure).unwrap();
 
     let spi_pins = spim::Pins {
         sck: clk,
@@ -188,7 +187,7 @@ fn main() -> ! {
     // instantiate ePaper
     let mut epd4in2 = EPD4in2::new(&mut spi, cs, busy, dc, rst, &mut delay).unwrap();
 
-    let mut display = Display4in2::default();
+    let display = Display4in2::default();
 
     epd4in2.update_frame(&mut spi, &display.buffer()).unwrap();
     epd4in2
@@ -196,7 +195,7 @@ fn main() -> ! {
         .expect("display frame new graphics");
 
     loop {
-        let result = sensor.read_measurement().unwrap();
+        let result = scd30.read_measurement().unwrap();
 
         let co2 = result.co2;
         let temp = result.temperature;
