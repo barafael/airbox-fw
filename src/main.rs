@@ -40,6 +40,7 @@ fn panic(_: &core::panic::PanicInfo) -> ! {
     }
 }
 
+#[derive(Default)]
 pub struct SensorData {
     pub co2: f32,
     pub temperature: f32,
@@ -56,6 +57,9 @@ const TEMP_UNIT: &str = "°C";
 
 const HUMIDITY_POSITION: (i32, i32) = (220, 170);
 const HUMIDITY_UNIT: &str = "%";
+
+const TVOC_POSITION: (i32, i32) = (220, 210);
+const TVOC_UNIT: &str = "";
 
 pub struct SCD30<T: Instance>(Twim<T>);
 
@@ -145,11 +149,11 @@ fn main() -> ! {
     let rst = port0.p0_29.into_push_pull_output(Level::Low);
     let busy = pins_1.p1_06.into_floating_input();
 
-    let scl = port0.p0_30.into_floating_input().degrade();
-    let sda = port0.p0_31.into_floating_input().degrade();
+    let sda = port0.p0_30.into_floating_input().degrade();
+    let scl = port0.p0_31.into_floating_input().degrade();
 
-    let scl1 = pins_1.p1_13.into_floating_input().degrade();
-    let sda1 = pins_1.p1_15.into_floating_input().degrade();
+    let sda1 = pins_1.p1_13.into_floating_input().degrade();
+    let scl1 = pins_1.p1_15.into_floating_input().degrade();
 
     let pins = twim::Pins { scl, sda };
     let pins1 = twim::Pins {
@@ -160,12 +164,11 @@ fn main() -> ! {
     let i2c = Twim::new(p.TWIM0, pins, twim::Frequency::K100);
     let i2c1 = Twim::new(p.TWIM1, pins1, twim::Frequency::K100);
 
-    let mut sgp40 = Sgp40::new(i2c1, 0x31, delay1);
-    rprintln!("TVOC: {}", sgp40.measure_voc_index().unwrap_or_default());
+    let mut sgp40 = Sgp40::new(i2c1, 0x59, delay1);
 
     let mut scd30 = SCD30::init(i2c);
 
-    let firmware_version = scd30.get_firmware_version().unwrap();
+    let firmware_version = scd30.get_firmware_version().unwrap_or_default();
     rprintln!(
         "SCD30 Firmware Version: {}.{}",
         firmware_version[0],
@@ -174,7 +177,9 @@ fn main() -> ! {
 
     let pressure = 1020_u16;
 
-    scd30.start_continuous_measurement(pressure).unwrap();
+    scd30
+        .start_continuous_measurement(pressure)
+        .unwrap_or_default();
 
     let spi_pins = spim::Pins {
         sck: clk,
@@ -195,17 +200,20 @@ fn main() -> ! {
         .expect("display frame new graphics");
 
     loop {
-        let result = scd30.read_measurement().unwrap();
+        let scd30_result = scd30.read_measurement().unwrap_or_default();
 
-        let co2 = result.co2;
-        let temp = result.temperature;
-        let humidity = result.humidity;
+        let tvoc = sgp40.measure_voc_index().unwrap_or_default();
+
+        let co2 = scd30_result.co2;
+        let temp = scd30_result.temperature;
+        let humidity = scd30_result.humidity;
 
         let display = Display4in2::default();
 
         let display = draw_numbers(co2, CO2_UNIT, CO2_POSITION, display);
         let display = draw_numbers(temp, TEMP_UNIT, TEMP_POSITION, display);
         let display = draw_numbers(humidity, HUMIDITY_UNIT, HUMIDITY_POSITION, display);
+        let display = draw_numbers(tvoc as f32, TVOC_UNIT, TVOC_POSITION, display);
 
         let display = draw_text(display);
 
@@ -240,6 +248,11 @@ pub fn draw_text(mut display: Display4in2) -> Display4in2 {
         .unwrap();
 
     Text::new("Humidity:", Point::new(20, 170))
+        .into_styled(TextStyle::new(Font12x16, BinaryColor::On))
+        .draw(&mut display)
+        .unwrap();
+
+    Text::new("TVOC-Score:", Point::new(20, 210))
         .into_styled(TextStyle::new(Font12x16, BinaryColor::On))
         .draw(&mut display)
         .unwrap();
