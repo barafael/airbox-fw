@@ -7,17 +7,18 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-cortex-m = "0.6.2"
-cortex-m-rt = "0.6.12"
-rtt-target = {version = "0.2.0", features = ["cortex-m"] }
-nrf52840-hal = { features = ["rt"], version = "*" }
-arrayvec = {version = "0.5.2", default-features = false }
+cortex-m = "0.7.2"
+cortex-m-rt = "0.6.13"
+rtt-target = { version = "0.3.0", features = ["cortex-m"] }
+nrf52840-hal = { features = ["rt"], version = "0.12.1" }
+arrayvec = { version = "0.5.2", default-features = false }
 crc_all = "0.2.0"
-#sgp40 = "0.0.1"
+sgp40 = { version="0.0.2", default-features=false, features=[] }
+#sgp40 = "0.0.2"
 
 epd-waveshare = "0.4.0"
 embedded-graphics = "0.6.2"
 
 [dependencies.embedded-hal]
-version = "0.2.3"
+version = "0.2.4"
 features = ["unproven"]

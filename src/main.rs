@@ -11,9 +11,8 @@ use nrf52840_hal::{
     gpio::{p0::Parts as P0Parts, p1::Parts as P1Parts, Level},
     prelude::*,
     spim::{self, Spim},
-    Timer,
-    Temp,
-    twim::{self, Twim, Error, Instance},
+    twim::{self, Error, Instance, Twim},
+    Temp, Timer,
 };
 
 //use sgp40::*;
@@ -22,22 +21,18 @@ use arrayvec::ArrayString;
 use core::fmt::Write;
 
 use embedded_graphics::{
-    fonts::{Font12x16, Font24x32, Text},
     egtext,
-    text_style,
+    fonts::{Font12x16, Font24x32, Text},
     geometry::Point,
     pixelcolor::BinaryColor,
     prelude::*,
-    primitives::{ Circle, Triangle },
+    primitives::{Circle, Triangle},
     style::PrimitiveStyle,
     style::TextStyle,
+    text_style,
 };
 
-use epd_waveshare::{
-    epd4in2::*,
-    graphics::Display,
-    prelude::*,
-};
+use epd_waveshare::{epd4in2::*, graphics::Display, prelude::*};
 
 use crc_all::Crc;
 
@@ -67,14 +62,16 @@ const HUMIDITY_UNIT: &str = "%";
 
 pub struct SCD30<T: Instance>(Twim<T>);
 
-impl<T> SCD30<T> where T: Instance {
-
+impl<T> SCD30<T>
+where
+    T: Instance,
+{
     pub fn init(i2c2: Twim<T>) -> Self {
         SCD30(i2c2)
     }
 
-        pub fn get_firmware_version(&mut self) -> Result<[u8; 2], Error> {
-        let command:[u8; 2] = [0xd1, 0x00];
+    pub fn get_firmware_version(&mut self) -> Result<[u8; 2], Error> {
+        let command: [u8; 2] = [0xd1, 0x00];
         let mut rd_buffer = [0u8; 2];
 
         self.0.write(DEFAULT_ADDRESS, &command)?;
@@ -102,36 +99,35 @@ impl<T> SCD30<T> where T: Instance {
 
         Ok(())
     }
-pub fn read_measurement(&mut self) -> Result<SensorData, Error> {
-    let command: [u8; 2] = [0x03, 0x00];
-    let mut rd_buffer = [0u8; 18];
+    pub fn read_measurement(&mut self) -> Result<SensorData, Error> {
+        let command: [u8; 2] = [0x03, 0x00];
+        let mut rd_buffer = [0u8; 18];
 
-    self.0.write(DEFAULT_ADDRESS, &command)?;
-    self.0.read(DEFAULT_ADDRESS, &mut rd_buffer)?;
+        self.0.write(DEFAULT_ADDRESS, &command)?;
+        self.0.read(DEFAULT_ADDRESS, &mut rd_buffer)?;
 
-    let data = SensorData {
-        co2: f32::from_bits(u32::from_be_bytes([
-            rd_buffer[0],
-            rd_buffer[1],
-            rd_buffer[3],
-            rd_buffer[4],
-        ])),
-        temperature: f32::from_bits(u32::from_be_bytes([
-            rd_buffer[6],
-            rd_buffer[7],
-            rd_buffer[9],
-            rd_buffer[10],
-        ])),
-        humidity: f32::from_bits(u32::from_be_bytes([
-            rd_buffer[12],
-            rd_buffer[13],
-            rd_buffer[15],
-            rd_buffer[16],
-        ])),
-    };
-    Ok(data)
-}
-
+        let data = SensorData {
+            co2: f32::from_bits(u32::from_be_bytes([
+                rd_buffer[0],
+                rd_buffer[1],
+                rd_buffer[3],
+                rd_buffer[4],
+            ])),
+            temperature: f32::from_bits(u32::from_be_bytes([
+                rd_buffer[6],
+                rd_buffer[7],
+                rd_buffer[9],
+                rd_buffer[10],
+            ])),
+            humidity: f32::from_bits(u32::from_be_bytes([
+                rd_buffer[12],
+                rd_buffer[13],
+                rd_buffer[15],
+                rd_buffer[16],
+            ])),
+        };
+        Ok(data)
+    }
 }
 
 #[cortex_m_rt::entry]
@@ -158,7 +154,10 @@ fn main() -> ! {
     let sda1 = pins_1.p1_15.into_floating_input().degrade();
 
     let pins = twim::Pins { scl, sda };
-    let pins1 = twim::Pins { scl: scl1, sda: sda1 };
+    let pins1 = twim::Pins {
+        scl: scl1,
+        sda: sda1,
+    };
 
     let i2c = Twim::new(p.TWIM0, pins, twim::Frequency::K100);
     let i2c1 = Twim::new(p.TWIM1, pins1, twim::Frequency::K100);
@@ -168,7 +167,11 @@ fn main() -> ! {
     let mut sensor = SCD30::init(i2c);
 
     let firmware_version = sensor.get_firmware_version().unwrap();
-    rprintln!("Firmware Version: {}.{}", firmware_version[0], firmware_version[1]);
+    rprintln!(
+        "Firmware Version: {}.{}",
+        firmware_version[0],
+        firmware_version[1]
+    );
 
     let pressure = 1020_u16;
 
@@ -188,16 +191,16 @@ fn main() -> ! {
     let mut display = Display4in2::default();
 
     epd4in2.update_frame(&mut spi, &display.buffer()).unwrap();
-    epd4in2.display_frame(&mut spi)
+    epd4in2
+        .display_frame(&mut spi)
         .expect("display frame new graphics");
 
     loop {
+        let result = sensor.read_measurement().unwrap();
 
-    let result = sensor.read_measurement().unwrap();
-
-    let co2 = result.co2;
-    let temp = result.temperature;
-    let humidity = result.humidity;
+        let co2 = result.co2;
+        let temp = result.temperature;
+        let humidity = result.humidity;
 
         let display = Display4in2::default();
 
@@ -208,7 +211,9 @@ fn main() -> ! {
         let display = draw_text(display);
 
         epd4in2.update_frame(&mut spi, &display.buffer()).unwrap();
-        epd4in2.display_frame(&mut spi).expect("display frame new graphics");
+        epd4in2
+            .display_frame(&mut spi)
+            .expect("display frame new graphics");
 
         if button.is_high().unwrap() {
             led.set_high().unwrap();
@@ -219,42 +224,47 @@ fn main() -> ! {
     }
 }
 
-pub fn draw_text (mut display: Display4in2 ) -> Display4in2 {
+pub fn draw_text(mut display: Display4in2) -> Display4in2 {
     Text::new("Air Quality", Point::new(20, 30))
         .into_styled(TextStyle::new(Font24x32, BinaryColor::On))
-        .draw(&mut display).unwrap();
+        .draw(&mut display)
+        .unwrap();
 
     Text::new("Carbon Dioxide:", Point::new(20, 90))
         .into_styled(TextStyle::new(Font12x16, BinaryColor::On))
-        .draw(&mut display).unwrap();
+        .draw(&mut display)
+        .unwrap();
 
     Text::new("Temperature:", Point::new(20, 130))
         .into_styled(TextStyle::new(Font12x16, BinaryColor::On))
-        .draw(&mut display).unwrap();
+        .draw(&mut display)
+        .unwrap();
 
     Text::new("Humidity:", Point::new(20, 170))
         .into_styled(TextStyle::new(Font12x16, BinaryColor::On))
-        .draw(&mut display).unwrap();
+        .draw(&mut display)
+        .unwrap();
 
     display
 }
 
-pub fn draw_numbers (value: f32, unit: &str, position: (i32, i32), mut display: Display4in2 ) -> Display4in2 {
+pub fn draw_numbers(
+    value: f32,
+    unit: &str,
+    position: (i32, i32),
+    mut display: Display4in2,
+) -> Display4in2 {
+    let mut buf = ArrayString::<[_; 12]>::new();
 
-let mut buf = ArrayString::<[_; 12]>::new();
+    write!(&mut buf, "{:.2} {}", value, unit).expect("Failed to write to buffer");
 
-write!(&mut buf, "{:.2} {}", value, unit).expect("Failed to write to buffer");
-
-egtext!(
-    text = &buf,
-    top_left = position,
-    style = text_style!(
-        font = Font12x16,
-        text_color = BinaryColor::On,
+    egtext!(
+        text = &buf,
+        top_left = position,
+        style = text_style!(font = Font12x16, text_color = BinaryColor::On,)
     )
-)
-.draw(&mut display).unwrap();
+    .draw(&mut display)
+    .unwrap();
 
     display
-
 }
