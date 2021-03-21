@@ -17,4 +17,4 @@ jobs:
             components: rustfmt, clippy
       - name: Build
 
-        run: sudo apt install arm-none-eabi-ld && rustup target add thumbv7em-none-eabihf && cargo build --release --verbose
+        run: rustup target add thumbv7em-none-eabihf && cargo build --release --verbose
