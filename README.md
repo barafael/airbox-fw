@@ -5,6 +5,7 @@ Note: Some code here was heavily inspired by trainings in [knurling-rs](https://
 
 TODO:
 
+* [ ] SGP40 valid first values on boot
 * [ ] Improve e-ink refresh
 * [ ] Improve font
 * [ ] Smileys for scores
