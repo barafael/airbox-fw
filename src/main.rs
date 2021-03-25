@@ -155,8 +155,8 @@ fn main() -> ! {
     let sda_scd30 = port1.p1_13.into_floating_input().degrade();
     let scl_scd30 = port1.p1_15.into_floating_input().degrade();
 
-    let sda_sgp40 = port1.p1_10.into_floating_input().degrade();
-    let scl_sgp40 = port1.p1_11.into_floating_input().degrade();
+    let sda_sgp40 = port1.p1_11.into_floating_input().degrade();
+    let scl_sgp40 = port1.p1_10.into_floating_input().degrade();
 
     let spi_pins = spim::Pins {
         sck: clk,
