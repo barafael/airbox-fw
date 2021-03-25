@@ -283,7 +283,7 @@ pub fn draw_numbers(
     position: (i32, i32),
     mut display: Display4in2,
 ) -> Display4in2 {
-    let mut buf = ArrayString::<[_; 12]>::new();
+    let mut buf = ArrayString::<12>::new();
 
     write!(&mut buf, "{:.2} {}", value, unit).expect("Failed to write to buffer");
 
