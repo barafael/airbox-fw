@@ -2,7 +2,6 @@
 #![no_std]
 
 use cortex_m::prelude::_embedded_hal_blocking_delay_DelayMs;
-use embedded_hal::digital::v2::InputPin;
 use embedded_hal::digital::v2::OutputPin;
 use rtt_target::{rprintln, rtt_init_print};
 
@@ -101,6 +100,7 @@ where
 
         Ok(())
     }
+
     pub fn read_measurement(&mut self) -> Result<SensorData, Error> {
         let command: [u8; 2] = [0x03, 0x00];
         let mut rd_buffer = [0u8; 18];
@@ -136,31 +136,46 @@ where
 fn main() -> ! {
     rtt_init_print!();
     let p = hal::pac::Peripherals::take().unwrap();
-    let port0 = hal::gpio::p0::Parts::new(p.P0);
-    let _button = port0.p0_11.into_pullup_input();
-    let mut led = port0.p0_13.into_push_pull_output(Level::Low);
     let mut delay = Timer::new(p.TIMER1);
     let delay1 = Timer::new(p.TIMER2);
 
-    let pins_1 = hal::gpio::p1::Parts::new(p.P1);
+    let port0 = hal::gpio::p0::Parts::new(p.P0);
+    let port1 = hal::gpio::p1::Parts::new(p.P1);
 
-    let din = pins_1.p1_01.into_push_pull_output(Level::Low).degrade();
-    let clk = pins_1.p1_02.into_push_pull_output(Level::Low).degrade();
-    let cs = pins_1.p1_03.into_push_pull_output(Level::Low);
-    let dc = pins_1.p1_04.into_push_pull_output(Level::Low);
-    let rst = port0.p0_29.into_push_pull_output(Level::Low);
-    let busy = pins_1.p1_06.into_floating_input();
+    let _button = port0.p0_11.into_pullup_input();
+    let mut led = port0.p0_13.into_push_pull_output(Level::Low);
 
-    let sda_scd30 = port0.p0_30.into_floating_input().degrade();
-    let scl_scd30 = port0.p0_31.into_floating_input().degrade();
+    let din = port0.p0_12.into_push_pull_output(Level::Low).degrade();
+    let clk = port0.p0_19.into_push_pull_output(Level::Low).degrade();
+    let cs = port0.p0_21.into_push_pull_output(Level::Low);
+    let dc = port0.p0_23.into_push_pull_output(Level::Low);
+    let rst = port0.p0_07.into_push_pull_output(Level::Low);
+    let busy = port1.p1_09.into_floating_input();
 
-    let sda_sgp40 = pins_1.p1_13.into_floating_input().degrade();
-    let scl_sgp40 = pins_1.p1_15.into_floating_input().degrade();
+    let sda_scd30 = port1.p1_13.into_floating_input().degrade();
+    let scl_scd30 = port1.p1_15.into_floating_input().degrade();
+
+    let sda_sgp40 = port1.p1_10.into_floating_input().degrade();
+    let scl_sgp40 = port1.p1_11.into_floating_input().degrade();
+
+    let spi_pins = spim::Pins {
+        sck: clk,
+        miso: None,
+        mosi: Some(din),
+    };
+
+    let mut spi = Spim::new(p.SPIM3, spi_pins, spim::Frequency::K500, spim::MODE_0, 0);
+
+    // instantiate ePaper
+    let mut epd4in2 = EPD4in2::new(&mut spi, cs, busy, dc, rst, &mut delay).unwrap();
+
+    let display = Display4in2::default();
 
     let pins_scd30 = twim::Pins {
         scl: scl_scd30,
         sda: sda_scd30,
     };
+
     let pins_sgp40 = twim::Pins {
         scl: scl_sgp40,
         sda: sda_sgp40,
@@ -170,6 +185,10 @@ fn main() -> ! {
     let i2c_sgp40 = Twim::new(p.TWIM1, pins_sgp40, twim::Frequency::K100);
 
     let mut sgp40 = Sgp40::new(i2c_sgp40, 0x59, delay1);
+
+    for _ in 0..50 {
+        let _ = sgp40.measure_voc_index();
+    }
 
     let mut scd30 = SCD30::init(i2c_scd30);
 
@@ -186,19 +205,6 @@ fn main() -> ! {
         .start_continuous_measurement(pressure)
         .unwrap_or_default();
 
-    let spi_pins = spim::Pins {
-        sck: clk,
-        miso: None,
-        mosi: Some(din),
-    };
-
-    let mut spi = Spim::new(p.SPIM3, spi_pins, spim::Frequency::K500, spim::MODE_0, 0);
-
-    // instantiate ePaper
-    let mut epd4in2 = EPD4in2::new(&mut spi, cs, busy, dc, rst, &mut delay).unwrap();
-
-    let display = Display4in2::default();
-
     epd4in2.update_frame(&mut spi, &display.buffer()).unwrap();
     epd4in2
         .display_frame(&mut spi)
@@ -209,16 +215,18 @@ fn main() -> ! {
     loop {
         let scd30_result = scd30.read_measurement().unwrap_or_default();
 
-        let tvoc = sgp40.measure_voc_index().unwrap_or_default();
-
         let co2 = scd30_result.co2;
-        let temp = scd30_result.temperature;
+        let temperature = scd30_result.temperature;
         let humidity = scd30_result.humidity;
+
+        let tvoc = sgp40
+            .measure_voc_index_with_rht(humidity as u16, temperature as i16)
+            .unwrap_or_default();
 
         let display = Display4in2::default();
 
         let display = draw_numbers(co2, CO2_UNIT, CO2_POSITION, display);
-        let display = draw_numbers(temp, TEMP_UNIT, TEMP_POSITION, display);
+        let display = draw_numbers(temperature, TEMP_UNIT, TEMP_POSITION, display);
         let display = draw_numbers(humidity, HUMIDITY_UNIT, HUMIDITY_POSITION, display);
         let display = draw_numbers(tvoc as f32, TVOC_UNIT, TVOC_POSITION, display);
 
